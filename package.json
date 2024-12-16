@@ -1,0 +1,12 @@
+{
+  "name": "solanmaverick",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GitHub profile README repository",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/solanmaverick/solanmaverick.git"
+  },
+  "author": "solanmaverick",
+  "license": "MIT"
+}
