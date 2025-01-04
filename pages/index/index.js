@@ -1,4 +1,4 @@
-const excelParser = require('../../utils/excel-parser.js')
+import { parseExcelFile } from '../../utils/excel-parser.js'
 
 Page({
   data: {
@@ -28,7 +28,7 @@ Page({
 
   parseExcelFile: function(filePath) {
     const fileData = wx.getFileSystemManager().readFileSync(filePath)
-    const result = excelParser.parseExcelFile(fileData)
+    const result = parseExcelFile(fileData)
     
     if (result.success) {
       this.setData({
