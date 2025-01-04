@@ -1,0 +1,55 @@
+.container {
+  padding: 20rpx;
+}
+
+.upload-section {
+  margin: 20rpx 0;
+  text-align: center;
+}
+
+.data-section {
+  margin-top: 20rpx;
+}
+
+.table-header {
+  display: flex;
+  background-color: #f8f8f8;
+  font-weight: bold;
+}
+
+.table-body {
+  margin-top: 2rpx;
+}
+
+.row {
+  display: flex;
+  border-bottom: 1rpx solid #eee;
+}
+
+.cell {
+  flex: 1;
+  padding: 10rpx;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.primary-button {
+  background-color: #07c160;
+  color: white;
+  padding: 20rpx 40rpx;
+  border-radius: 10rpx;
+  margin: 20rpx;
+}
+
+.settings-button {
+  position: fixed;
+  bottom: 30rpx;
+  right: 30rpx;
+  background-color: #1989fa;
+  color: white;
+  padding: 20rpx;
+  border-radius: 10rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.1);
+}

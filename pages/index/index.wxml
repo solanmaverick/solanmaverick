@@ -1,0 +1,18 @@
+<view class="container">
+  <view class="upload-section">
+    <button class="primary-button" bindtap="chooseFile">选择Excel文件</button>
+  </view>
+  <view class="data-section" wx:if="{{excelData}}">
+    <view class="table-header">
+      <view class="cell" wx:for="{{headers}}" wx:key="index">{{item}}</view>
+    </view>
+    <view class="table-body">
+      <view class="row" wx:for="{{excelData}}" wx:key="index">
+        <view class="cell" wx:for="{{item}}" wx:key="index" style="color:{{item.style.font.color}};background-color:{{item.style.fill.color}};font-weight:{{item.style.font.bold ? 'bold' : 'normal'}};font-style:{{item.style.font.italic ? 'italic' : 'normal'}};text-decoration:{{item.style.font.underline ? 'underline' : 'none'}};text-align:{{item.style.alignment.horizontal}};">{{item.value}}</view>
+      </view>
+    </view>
+  </view>
+  <view class="settings-button" bindtap="navigateToSettings">
+    <text>设置</text>
+  </view>
+</view>

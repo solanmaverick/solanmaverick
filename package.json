@@ -1,0 +1,12 @@
+{
+  "name": "excel-parser-mini-program",
+  "version": "1.0.0",
+  "description": "WeChat Mini Program for parsing Excel files",
+  "main": "app.js",
+  "dependencies": {
+    "xlsx": "^0.18.5"
+  },
+  "scripts": {},
+  "author": "",
+  "license": "ISC"
+}
