@@ -1,0 +1,36 @@
+<view class="container">
+  <view class="header">
+    <text class="title">显示设置</text>
+  </view>
+
+  <view class="fixed-attributes">
+    <text class="section-title">固定显示属性</text>
+    <view class="attribute-list">
+      <view wx:for="{{fixedAttributes}}" wx:key="*this" class="attribute-item fixed">
+        <text>{{item}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="optional-attributes">
+    <text class="section-title">可选显示属性</text>
+    <view class="attribute-list">
+      <view wx:for="{{availableAttributes}}" wx:key="*this" 
+            class="attribute-item {{selectedAttributes.includes(item) ? 'selected' : ''}}"
+            bindtap="toggleAttribute"
+            data-attribute="{{item}}">
+        <text>{{item}}</text>
+        <view class="controls" wx:if="{{selectedAttributes.includes(item)}}">
+          <button class="mini-btn" 
+                  bindtap="moveAttributeUp" 
+                  data-index="{{selectedAttributes.indexOf(item)}}"
+                  disabled="{{selectedAttributes.indexOf(item) === 0}}">↑</button>
+          <button class="mini-btn" 
+                  bindtap="moveAttributeDown" 
+                  data-index="{{selectedAttributes.indexOf(item)}}"
+                  disabled="{{selectedAttributes.indexOf(item) === selectedAttributes.length - 1}}">↓</button>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

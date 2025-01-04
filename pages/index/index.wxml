@@ -1,0 +1,115 @@
+<view class="container">
+  <!-- File Upload Section -->
+  <view class="upload-section" wx:if="{{!hasUploadedFile}}">
+    <view class="upload-box">
+      <text class="upload-title">上传Excel文件</text>
+      <text class="upload-subtitle">支持 .xlsx, .xls, .csv 格式</text>
+      <button class="upload-button" bindtap="chooseFile" loading="{{isProcessing}}">
+        选择文件
+      </button>
+      <text class="error-message" wx:if="{{errorMessage}}">{{errorMessage}}</text>
+    </view>
+  </view>
+
+  <!-- Table View Section -->
+  <block wx:if="{{hasUploadedFile}}">
+    <!-- Toolbar -->
+    <view class="toolbar">
+      <view class="toolbar-left">
+        <button class="icon-button" bindtap="undo" disabled="{{undoStack.length === 0}}">
+          <image src="/assets/undo.png" class="{{undoStack.length === 0 ? 'disabled' : ''}}" />
+          <text>撤销</text>
+        </button>
+        <button class="icon-button" bindtap="redo" disabled="{{redoStack.length === 0}}">
+          <image src="/assets/redo.png" class="{{redoStack.length === 0 ? 'disabled' : ''}}" />
+          <text>重做</text>
+        </button>
+        <button class="icon-button" bindtap="saveAndShare">
+          <image src="/assets/save.png" />
+          <text>保存</text>
+        </button>
+      </view>
+      <view class="toolbar-right">
+        <navigator url="/pages/settings/settings" class="settings-button">
+          <image src="/assets/settings.png" />
+          <text>显示设置</text>
+        </navigator>
+      </view>
+    </view>
+
+    <!-- Student Info -->
+    <view class="student-info" wx:if="{{studentInfo}}">
+      <text>姓名：{{studentInfo.name}}</text>
+      <text>分数：{{studentInfo.score}}</text>
+      <text>选科：{{studentInfo.subject}}</text>
+      <text>查询码：{{studentInfo.queryCode}}</text>
+    </view>
+
+    <!-- Table Data -->
+    <view class="table-container">
+      <block wx:for="{{tableData.rows}}" wx:key="index">
+        <view class="table-row {{selectedRowIndex === index ? 'selected' : ''}}" bindtap="selectRow" data-index="{{index}}">
+          <!-- Operations Sidebar -->
+          <view class="operations {{selectedRowIndex === index ? 'selected' : ''}}">
+            <button bindtap="deleteRow" disabled="{{selectedRowIndex !== index}}">删除</button>
+            <button bindtap="moveRowUp" disabled="{{selectedRowIndex !== index}}">上移</button>
+            <button bindtap="moveRowDown" disabled="{{selectedRowIndex !== index}}">下移</button>
+            <button bindtap="markRow" disabled="{{selectedRowIndex !== index}}">标记</button>
+            <button bindtap="showMoveToDialog" disabled="{{selectedRowIndex !== index}}">移动到</button>
+          </view>
+          
+          <!-- Row Content -->
+          <view class="row-content">
+            <!-- Fixed Attributes -->
+            <view class="fixed-attributes">
+              <!-- School Name -->
+              <view class="attribute-row school-name">
+                <text class="attribute-label">学校名称:</text>
+                <text class="attribute-value" style="color: {{item['学校名称'].style.color}}; background-color: {{item['学校名称'].style.backgroundColor}}; font-weight: {{item['学校名称'].style.bold ? 'bold' : 'normal'}};">{{item['学校名称'].value}}</text>
+              </view>
+              <!-- Major Name -->
+              <view class="attribute-row major-name">
+                <text class="attribute-label">专业名称:</text>
+                <text class="attribute-value" style="color: {{item['专业名称'].style.color}}; background-color: {{item['专业名称'].style.backgroundColor}}; font-weight: {{item['专业名称'].style.bold ? 'bold' : 'normal'}};">{{item['专业名称'].value}}</text>
+              </view>
+              <!-- School Code - No Label -->
+              <view class="attribute-row code-row school-code">
+                <text class="code-value" style="color: {{item['学校代码'].style.color}}; background-color: {{item['学校代码'].style.backgroundColor}}; font-weight: {{item['学校代码'].style.bold ? 'bold' : 'normal'}};">{{item['学校代码'].value}}</text>
+              </view>
+              <!-- Major Code - No Label -->
+              <view class="attribute-row code-row major-code">
+                <text class="code-value" style="color: {{item['专业代码'].style.color}}; background-color: {{item['专业代码'].style.backgroundColor}}; font-weight: {{item['专业代码'].style.bold ? 'bold' : 'normal'}};">{{item['专业代码'].value}}</text>
+              </view>
+              <!-- Ranking Difference -->
+              <view class="attribute-row ranking-diff">
+                <text class="attribute-label">位次差:</text>
+                <text class="attribute-value" style="color: {{item['位次差'].style.color}}; background-color: {{item['位次差'].style.backgroundColor}}; font-weight: {{item['位次差'].style.bold ? 'bold' : 'normal'}};">{{item['位次差'].value}}</text>
+              </view>
+            </view>
+            <!-- Dynamic Attributes -->
+            <view class="dynamic-attributes">
+              <block wx:for="{{displayAttributes}}" wx:for-item="attr" wx:key="attr">
+                <view class="attribute-row" wx:if="{{!fixedAttributes.includes(attr)}}">
+                  <text class="attribute-label">{{attr}}:</text>
+                  <text class="attribute-value" style="color: {{item[attr].style.color}}; background-color: {{item[attr].style.backgroundColor}}; font-weight: {{item[attr].style.bold ? 'bold' : 'normal'}};">{{item[attr].value}}</text>
+                </view>
+              </block>
+            </view>
+          </view>
+        </view>
+      </block>
+    </view>
+  </block>
+
+  <!-- Move To Dialog -->
+  <view class="move-to-dialog {{moveToVisible ? 'visible' : ''}}" bindtap="closeMoveToDialog">
+    <view class="move-to-content" catchtap="stopPropagation">
+      <text class="move-to-title">移动到第几行？</text>
+      <input type="number" class="move-to-input" bindinput="handleMoveToInput" value="{{moveToRowNumber}}" placeholder="请输入行号"/>
+      <view class="move-to-buttons">
+        <button bindtap="closeMoveToDialog">取消</button>
+        <button bindtap="moveRowTo" type="primary">确定</button>
+      </view>
+    </view>
+  </view>
+</view>
