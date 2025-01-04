@@ -13,12 +13,9 @@
     "minified": true,
     "newFeature": false,
     "coverView": true,
-    "nodeModules": true,
-    "packNpmManually": true,
-    "packNpmRelationList": [{
-      "packageJsonPath": "./package.json",
-      "miniprogramNpmDistDir": "./"
-    }],
+    "nodeModules": false,
+    "packNpmManually": false,
+    "packNpmRelationList": [],
     "autoAudits": false,
     "showShadowRootInWxmlPanel": true,
     "scopeDataCheck": false,

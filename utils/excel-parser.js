@@ -1,4 +1,4 @@
-const XLSX = require('miniprogram_npm/xlsx');
+const XLSX = require('./xlsx.js');
 
 const parseExcelFile = (function() {
   // Style extraction helper functions
