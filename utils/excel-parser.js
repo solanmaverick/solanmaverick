@@ -25,14 +25,16 @@ const parseExcelFile = (function() {
         throw new Error('Invalid sheet data');
       }
       
-      // Extract headers from the first row
-      const headers = firstSheet.data[0] || [];
+      // Get all unique column letters as headers
+      const headers = Object.keys(firstSheet.data[0] || {}).sort((a, b) => 
+        XLSX.utils.letterToColumn(a) - XLSX.utils.letterToColumn(b)
+      );
       console.debug('Extracted headers:', headers);
       
-      // Process data rows (skip header row)
-      const data = firstSheet.data.slice(1).map(row => {
-        return row.map(cell => ({
-          value: cell || '',
+      // Process all rows (including first row as it's already in the right format)
+      const data = firstSheet.data.map(row => {
+        return headers.map(header => ({
+          value: row[header] || '',
           style: null // No styles in simplified implementation
         }));
       });

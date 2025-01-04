@@ -10,6 +10,40 @@ const XLSX = {
     XLS: 'xls',
     CSV: 'csv'
   },
+  
+  utils: {
+    letterToColumn: function(str) {
+      if (!str || typeof str !== 'string') {
+        console.error('Invalid column reference:', str);
+        return 0;
+      }
+      const letter = str.toUpperCase().replace(/[^A-Z]/g, '');
+      if (!letter) {
+        console.error('No valid column letters found in:', str);
+        return 0;
+      }
+      let column = 0;
+      for (let i = 0; i < letter.length; i++) {
+        column += (letter.charCodeAt(i) - 64) * Math.pow(26, letter.length - i - 1);
+      }
+      return column - 1;
+    },
+    
+    columnToLetter: function(column) {
+      try {
+        let temp = column;
+        let letter = '';
+        while (temp >= 0) {
+          letter = String.fromCharCode((temp % 26) + 65) + letter;
+          temp = Math.floor(temp / 26) - 1;
+        }
+        return letter;
+      } catch (error) {
+        console.error('Error in columnToLetter:', error);
+        return 'A';
+      }
+    }
+  },
 
   // Magic numbers for file type detection
   SIGNATURES: {
@@ -250,11 +284,24 @@ const XLSX = {
         // Method 8 - Deflate
         console.log('Using DEFLATE decompression');
         try {
-          // Create a new array with just the compressed data
-          const rawDeflateData = new Uint8Array(compressedData.length);
-          rawDeflateData.set(compressedData);
-          
-          decompressedArray = pako.inflate(rawDeflateData);
+          // Try different pako inflation options for raw DEFLATE data
+          try {
+            // First try with raw mode (no wrapper)
+            decompressedArray = pako.inflate(compressedData, { raw: true });
+            console.log('Successfully decompressed with raw mode');
+          } catch (rawError) {
+            console.log('Raw mode failed, trying with windowBits:', rawError);
+            try {
+              // Try with negative windowBits for raw deflate
+              decompressedArray = pako.inflate(compressedData, { windowBits: -15 });
+              console.log('Successfully decompressed with negative windowBits');
+            } catch (windowError) {
+              console.log('Negative windowBits failed, trying with wrapper:', windowError);
+              // Last resort: try with zlib wrapper
+              decompressedArray = pako.inflate(compressedData, { windowBits: 15 });
+              console.log('Successfully decompressed with zlib wrapper');
+            }
+          }
           console.log(`Decompressed to ${decompressedArray.length} bytes`);
           
           // Log first few bytes of decompressed data for debugging
@@ -570,41 +617,55 @@ const XLSX = {
   },
 
   getSheetData(sheetXML, sharedStrings) {
-    const doc = this.parseXMLString(sheetXML);
-    const rows = this.getElementsByTagName(doc, 'row');
-    const data = [];
-    let maxCol = 0;
-    
-    for (const row of rows) {
-      const rowData = {};
-      const cells = this.getElementsByTagName(row, 'c');
+    try {
+      console.log('Parsing sheet XML...');
+      const doc = this.parseXMLString(sheetXML);
+      const rows = this.getElementsByTagName(doc, 'row');
+      const data = [];
+      let maxCol = 0;
       
-      for (const cell of cells) {
-        const ref = this.getAttribute(cell, 'r');
-        const colLetter = ref.replace(/[0-9]/g, '');
-        const colIndex = this.letterToColumn(colLetter);
-        maxCol = Math.max(maxCol, colIndex);
+      console.log(`Found ${rows.length} rows`);
+      for (const row of rows) {
+        const cells = this.getElementsByTagName(row, 'c');
+        const rowData = new Array(maxCol + 1).fill(null);
         
-        rowData[colLetter] = this.getCellValue(cell, sharedStrings);
+        console.log(`Processing row with ${cells.length} cells`);
+        for (const cell of cells) {
+          const ref = this.getAttribute(cell, 'r');
+          if (!ref) {
+            console.warn('Cell missing reference attribute');
+            continue;
+          }
+          
+          const colLetter = ref.replace(/[0-9]/g, '');
+          const colIndex = this.utils.letterToColumn(colLetter);
+          maxCol = Math.max(maxCol, colIndex);
+          
+          // Extend row array if needed
+          if (colIndex >= rowData.length) {
+            rowData.length = colIndex + 1;
+            rowData.fill(null, rowData.indexOf(null));
+          }
+          
+          
+          rowData[colIndex] = this.getCellValue(cell, sharedStrings);
+        }
+        
+        data.push(rowData);
       }
       
-      // Convert to array format matching CSV parser
-      const rowArray = {};
-      const headers = Object.keys(rowData).sort((a, b) => 
-        this.utils.letterToColumn(a) - this.utils.letterToColumn(b)
-      );
-      
-      headers.forEach(header => {
-        rowArray[header] = rowData[header];
+      console.log('Sheet data processed:', {
+        rowCount: data.length,
+        maxCol: maxCol + 1
       });
       
-      data.push(rowArray);
+      return { data, maxCol };
+    } catch (error) {
+      console.error('Error in getSheetData:', error);
+      throw error;
     }
-    
-    return { data, maxCol };
   },
 
-  // Parse XLSX data
   parseXLSX(buffer) {
     try {
       const files = this.unzip(buffer);
@@ -626,14 +687,16 @@ const XLSX = {
       
       // Convert column indices to letters for headers
       const headers = Array.from({ length: maxCol + 1 }, (_, i) => 
-        this.columnToLetter(i)
+        this.utils.columnToLetter(i)
       );
       
       // Format data to match CSV parser output
       const formattedData = data.map(row => {
-        const newRow = {};
-        headers.forEach(header => {
-          newRow[header] = row[header] || '';
+        const newRow = Array(headers.length).fill('');
+        row.forEach((value, index) => {
+          if (value !== null) {
+            newRow[index] = value;
+          }
         });
         return newRow;
       });
@@ -651,37 +714,16 @@ const XLSX = {
         }
       };
     } catch (e) {
+      console.error('XLSX parsing error:', e);
       throw new Error(`XLSX parsing failed: ${e.message}`);
     }
   },
 
-  // Parse XLS data (basic implementation)
   parseXLS(buffer) {
     // For now, return error as XLS binary parsing is complex
     // This should be implemented based on specific needs
     throw new Error('XLS parsing not implemented');
-  },
-
-  // Utility functions
-  // Convert column index to letter (e.g., 0 -> 'A', 1 -> 'B')
-  columnToLetter(column) {
-    let temp = column;
-    let letter = '';
-    while (temp >= 0) {
-      letter = String.fromCharCode((temp % 26) + 65) + letter;
-      temp = Math.floor(temp / 26) - 1;
-    }
-    return letter;
-  },
-
-  // Convert letter to column index (e.g., 'A' -> 0, 'B' -> 1)
-  letterToColumn(letter) {
-    let column = 0;
-    for (let i = 0; i < letter.length; i++) {
-        column += (letter.charCodeAt(i) - 64) * Math.pow(26, letter.length - i - 1);
-      }
-      return column - 1;
-    }
+  }
 };
 
 // Export the XLSX object for CommonJS environments
