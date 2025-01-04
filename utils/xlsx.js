@@ -1,2 +1,4 @@
-// xlsx.js - Using relative path for no-dependency implementation
-module.exports = require('../miniprogram_npm/xlsx');
+// xlsx.js - Using ES6 import for WeChat Mini Program compatibility
+import XLSX from '../miniprogram_npm/xlsx/index.js';
+
+export default XLSX;

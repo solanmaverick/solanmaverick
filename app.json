@@ -8,5 +8,6 @@
     "navigationBarBackgroundColor": "#fff",
     "navigationBarTitleText": "Excel Parser",
     "navigationBarTextStyle": "black"
-  }
+  },
+  "lazyCodeLoading": "requiredComponents"
 }

@@ -1,4 +1,4 @@
-const XLSX = require('./xlsx.js');
+import XLSX from './xlsx.js';
 
 const parseExcelFile = (function() {
   // Style extraction helper functions
@@ -167,6 +167,6 @@ const parseExcelFile = (function() {
   };
 })();
 
-module.exports = {
+export {
   parseExcelFile
 };
