@@ -172,10 +172,20 @@ const XLSX = {
         uncompressedSize: entry.uncompressedSize
       });
 
-      // Convert buffer to ArrayBuffer if needed
-      const arrayBuffer = this.toArrayBuffer(buffer);
-      const view = new DataView(arrayBuffer);
+      // Convert buffer to Uint8Array for consistent handling
+      let fullData;
+      if (buffer instanceof ArrayBuffer) {
+        fullData = new Uint8Array(buffer);
+      } else if (Buffer.isBuffer(buffer)) {
+        fullData = new Uint8Array(buffer);
+      } else if (buffer instanceof Uint8Array) {
+        fullData = buffer;
+      } else {
+        throw new Error(`Unsupported buffer type: ${buffer.constructor.name}`);
+      }
+
       let offset = entry.localHeaderOffset;
+      const view = new DataView(fullData.buffer, fullData.byteOffset, fullData.byteLength);
       
       // Verify local file header signature (0x04034b50)
       const signature = view.getUint32(offset, true);
@@ -185,32 +195,49 @@ const XLSX = {
       }
       
       // Read local file header
+      const bitFlag = view.getUint16(offset + 6, true);
       const compressionMethod = view.getUint16(offset + 8, true);
+      const lastModTime = view.getUint16(offset + 10, true);
+      const lastModDate = view.getUint16(offset + 12, true);
+      const crc32 = view.getUint32(offset + 14, true);
       const compressedSize = view.getUint32(offset + 18, true);
       const uncompressedSize = view.getUint32(offset + 22, true);
       const nameLength = view.getUint16(offset + 26, true);
       const extraLength = view.getUint16(offset + 28, true);
       
       console.log('File header info:', {
+        bitFlag: bitFlag.toString(2).padStart(16, '0'),
         compressionMethod,
         compressedSize,
         uncompressedSize,
         nameLength,
-        extraLength
+        extraLength,
+        crc32: crc32.toString(16)
       });
       
       // Skip header and read file name
       offset += 30;
-      const fileNameBytes = new Uint8Array(arrayBuffer.slice(offset, offset + nameLength));
+      const fileNameBytes = fullData.slice(offset, offset + nameLength);
       const fileName = new TextDecoder().decode(fileNameBytes);
       console.log('Filename from header:', fileName);
       
       // Skip name and extra field to get to data
       offset += nameLength + extraLength;
+      
+      // Handle data descriptor if present
+      let dataSize = compressedSize;
+      if ((bitFlag & 0x0008) !== 0) {
+        console.log('Data descriptor present, using entry size');
+        dataSize = entry.compressedSize;
+      }
+      
       console.log('Data starts at offset:', offset);
+      console.log('Using data size:', dataSize);
       
       // Extract compressed data
-      const compressedData = new Uint8Array(arrayBuffer.slice(offset, offset + compressedSize));
+      const compressedData = new Uint8Array(dataSize);
+      compressedData.set(fullData.slice(offset, offset + dataSize));
+      
       console.log(`Read ${compressedData.length} bytes of compressed data`);
       console.log('First few bytes:', Array.from(compressedData.slice(0, 4)).map(b => b.toString(16).padStart(2, '0')).join(' '));
       
@@ -219,25 +246,40 @@ const XLSX = {
         // Method 0 - Stored (no compression)
         console.log('Using stored (no compression) method');
         decompressedArray = compressedData;
-        if (decompressedArray.length !== uncompressedSize) {
-          throw new Error(`Uncompressed size mismatch: expected ${uncompressedSize}, got ${decompressedArray.length}`);
-        }
       } else if (compressionMethod === 8) {
         // Method 8 - Deflate
         console.log('Using DEFLATE decompression');
         try {
-          decompressedArray = pako.inflate(compressedData);
+          // Create a new array with just the compressed data
+          const rawDeflateData = new Uint8Array(compressedData.length);
+          rawDeflateData.set(compressedData);
+          
+          decompressedArray = pako.inflate(rawDeflateData);
           console.log(`Decompressed to ${decompressedArray.length} bytes`);
-          if (decompressedArray.length !== uncompressedSize) {
-            console.warn(`Size mismatch: expected ${uncompressedSize}, got ${decompressedArray.length}`);
-          }
+          
+          // Log first few bytes of decompressed data for debugging
+          console.log('First few bytes of decompressed data:', 
+            Array.from(decompressedArray.slice(0, 16)).map(b => b.toString(16).padStart(2, '0')).join(' '));
+            
         } catch (e) {
           console.error('Decompression failed:', e);
+          console.error('Compression info:', {
+            method: compressionMethod,
+            bitFlags: bitFlag.toString(2).padStart(16, '0'),
+            compressedSize: dataSize,
+            uncompressedSize,
+            crc32: crc32.toString(16)
+          });
           console.error('First 16 bytes of failed data:', Array.from(compressedData.slice(0, 16)).map(b => b.toString(16).padStart(2, '0')).join(' '));
           throw new Error(`Failed to decompress ZIP entry ${fileName}: ${e.message}`);
         }
       } else {
         throw new Error(`Unsupported compression method: ${compressionMethod}`);
+      }
+      
+      // Verify size if we have it
+      if (uncompressedSize > 0 && decompressedArray.length !== uncompressedSize) {
+        console.warn(`Size mismatch: expected ${uncompressedSize}, got ${decompressedArray.length}`);
       }
       
       // Try UTF-8 decoding first
@@ -248,7 +290,7 @@ const XLSX = {
         return text;
       } catch (e) {
         // Fallback to ASCII if UTF-8 fails
-        console.warn('UTF-8 decoding failed, falling back to ASCII');
+        console.warn('UTF-8 decoding failed, falling back to ASCII:', e);
         return new TextDecoder('ascii').decode(decompressedArray);
       }
     } catch (e) {
