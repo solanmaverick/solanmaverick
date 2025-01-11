@@ -2,14 +2,36 @@ import itchat
 import time
 import logging
 import os
-from datetime import datetime
+import json
+from datetime import datetime, timedelta
+from collections import defaultdict
+from transformers import pipeline
+from apscheduler.schedulers.background import BackgroundScheduler
 from itchat.content import (
     TEXT, PICTURE, RECORDING, ATTACHMENT, VIDEO,
     MAP, CARD, NOTE, SHARING, FRIENDS
 )
 
-# Create logs directory if it doesn't exist
+# Create required directories
 os.makedirs('logs', exist_ok=True)
+os.makedirs('media', exist_ok=True)
+os.makedirs('summaries', exist_ok=True)
+
+# Load or create config
+CONFIG_FILE = 'config.json'
+if os.path.exists(CONFIG_FILE):
+    with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+        config = json.load(f)
+else:
+    config = {
+        'monitored_groups': [],  # List of group IDs to monitor
+        'summary_time': '23:59',  # Time to generate daily summaries
+    }
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(config, f, indent=4, ensure_ascii=False)
+
+# Initialize summarization pipeline
+summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
 
 # Configure logging
 logging.basicConfig(
@@ -94,23 +116,84 @@ def save_message(msg_data):
     """Save message to a daily log file"""
     try:
         date_str = datetime.now().strftime('%Y-%m-%d')
-        filename = f'logs/messages_{date_str}.log'
+        group_id = msg_data.get('GroupId', 'unknown')
         
+        # Save to general log
+        filename = f'logs/messages_{date_str}.log'
         with open(filename, 'a', encoding='utf-8') as f:
             f.write('-' * 50 + '\n')
             for key, value in msg_data.items():
                 f.write(f'{key}: {value}\n')
             f.write('-' * 50 + '\n')
+        
+        # Save to group-specific log if group is monitored
+        if group_id in config['monitored_groups']:
+            group_log = f'logs/group_{group_id}_{date_str}.log'
+            with open(group_log, 'a', encoding='utf-8') as f:
+                f.write(f"{msg_data['Time']} - {msg_data['From']}: {msg_data['Content']}\n")
+    
     except Exception as e:
         logger.error(f'Error saving message: {str(e)}')
+
+def generate_summary(group_id, date_str=None):
+    """Generate summary for a specific group's messages"""
+    try:
+        if date_str is None:
+            date_str = datetime.now().strftime('%Y-%m-%d')
+        
+        group_log = f'logs/group_{group_id}_{date_str}.log'
+        if not os.path.exists(group_log):
+            logger.warning(f'No messages found for group {group_id} on {date_str}')
+            return None
+        
+        # Read messages
+        with open(group_log, 'r', encoding='utf-8') as f:
+            messages = f.read()
+        
+        # Generate summary using transformers
+        if len(messages.strip()) > 0:
+            summary = summarizer(messages, max_length=130, min_length=30, do_sample=False)[0]['summary_text']
+            
+            # Save summary
+            summary_file = f'summaries/summary_{group_id}_{date_str}.txt'
+            with open(summary_file, 'w', encoding='utf-8') as f:
+                f.write(f"Daily Summary for {date_str}\n")
+                f.write("-" * 50 + "\n")
+                f.write(summary + "\n")
+                f.write("\nMessage Statistics:\n")
+                f.write(f"Total messages: {len(messages.splitlines())}\n")
+            
+            return summary
+        return None
+    
+    except Exception as e:
+        logger.error(f'Error generating summary: {str(e)}')
+        return None
+
+def generate_daily_summaries():
+    """Generate summaries for all monitored groups"""
+    logger.info('Generating daily summaries...')
+    for group_id in config['monitored_groups']:
+        summary = generate_summary(group_id)
+        if summary:
+            logger.info(f'Generated summary for group {group_id}')
+            logger.info(f'Summary: {summary}')
 
 def main():
     """Main function to run the WeChat monitor"""
     logger.info('Starting WeChat monitor...')
     
     try:
-        # Create media directory for downloaded files
-        os.makedirs('media', exist_ok=True)
+        # Set up scheduler for daily summaries
+        scheduler = BackgroundScheduler()
+        summary_time = config['summary_time'].split(':')
+        scheduler.add_job(
+            generate_daily_summaries,
+            'cron',
+            hour=summary_time[0],
+            minute=summary_time[1]
+        )
+        scheduler.start()
         
         # Enable hot reload to maintain login state
         itchat.auto_login(
