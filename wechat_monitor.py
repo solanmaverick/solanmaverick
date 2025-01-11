@@ -74,10 +74,15 @@ def handle_command(msg):
         if command == '/list':
             # List all available groups
             groups_msg = "Available Groups:\n"
+            monitored_count = 0
             for room_id, room_name in monitored_rooms.items():
                 status = "✓" if room_id in config['monitored_groups'] else " "
                 groups_msg += f"[{status}] {room_name} (ID: {room_id})\n"
+                if status == "✓":
+                    monitored_count += 1
+            groups_msg += f"\nCurrently monitoring {monitored_count} groups"
             itchat.send(groups_msg, 'filehelper')
+            logger.info(f"Listed {len(monitored_rooms)} groups ({monitored_count} monitored)")
         
         elif command.startswith('/monitor '):
             group_id = command[9:].strip()
@@ -86,7 +91,9 @@ def handle_command(msg):
                     config['monitored_groups'].append(group_id)
                     with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
                         json.dump(config, f, indent=4, ensure_ascii=False)
-                    itchat.send(f'Now monitoring group: {monitored_rooms[group_id]}', 'filehelper')
+                    response = f'Now monitoring group: {monitored_rooms[group_id]}'
+                    itchat.send(response, 'filehelper')
+                    logger.info(f"Started monitoring group: {monitored_rooms[group_id]} ({group_id})")
                 else:
                     itchat.send('This group is already being monitored.', 'filehelper')
             else:
@@ -189,28 +196,60 @@ def generate_summary(group_id, date_str=None):
         if date_str is None:
             date_str = datetime.now().strftime('%Y-%m-%d')
         
+        group_name = monitored_rooms.get(group_id, 'Unknown Group')
         group_log = f'logs/group_{group_id}_{date_str}.log'
+        
         if not os.path.exists(group_log):
-            logger.warning(f'No messages found for group {group_id} on {date_str}')
+            logger.warning(f'No messages found for group {group_name} ({group_id}) on {date_str}')
             return None
         
-        # Read messages
+        # Read messages and analyze
+        message_types = defaultdict(int)
+        user_messages = defaultdict(int)
+        total_messages = 0
+        
         with open(group_log, 'r', encoding='utf-8') as f:
-            messages = f.read()
+            messages = []
+            for line in f:
+                total_messages += 1
+                if ' - ' in line:
+                    sender = line.split(' - ')[1].split(':')[0].strip()
+                    user_messages[sender] += 1
+                    if '[' in line and ']' in line:
+                        msg_type = line[line.find('[')+1:line.find(']')]
+                        message_types[msg_type] += 1
+                messages.append(line)
+            
+            messages_text = ''.join(messages)
         
         # Generate summary using transformers
-        if len(messages.strip()) > 0:
-            summary = summarizer(messages, max_length=130, min_length=30, do_sample=False)[0]['summary_text']
+        if len(messages_text.strip()) > 0:
+            summary = summarizer(messages_text, max_length=130, min_length=30, do_sample=False)[0]['summary_text']
             
-            # Save summary
+            # Save detailed summary
             summary_file = f'summaries/summary_{group_id}_{date_str}.txt'
             with open(summary_file, 'w', encoding='utf-8') as f:
-                f.write(f"Daily Summary for {date_str}\n")
-                f.write("-" * 50 + "\n")
-                f.write(summary + "\n")
-                f.write("\nMessage Statistics:\n")
-                f.write(f"Total messages: {len(messages.splitlines())}\n")
+                f.write(f"Daily Summary for {group_name} ({group_id})\n")
+                f.write(f"Date: {date_str}\n")
+                f.write("-" * 50 + "\n\n")
+                f.write("Summary:\n")
+                f.write(summary + "\n\n")
+                f.write("Message Statistics:\n")
+                f.write(f"Total messages: {total_messages}\n\n")
+                
+                if message_types:
+                    f.write("Message Types:\n")
+                    for msg_type, count in message_types.items():
+                        f.write(f"- {msg_type}: {count}\n")
+                    f.write("\n")
+                
+                if user_messages:
+                    f.write("Top Contributors:\n")
+                    sorted_users = sorted(user_messages.items(), key=lambda x: x[1], reverse=True)[:5]
+                    for user, count in sorted_users:
+                        f.write(f"- {user}: {count} messages\n")
             
+            logger.info(f"Generated summary for {group_name} ({group_id}) with {total_messages} messages")
             return summary
         return None
     
