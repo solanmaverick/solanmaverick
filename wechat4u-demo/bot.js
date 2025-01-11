@@ -26,17 +26,27 @@ if (fs.existsSync(CONFIG_FILE)) {
 }
 
 // Listen for scan event (QR Code)
-bot.on('scan', ({url}) => {
-  // Clear QR timeout since we received the event
-  clearTimeout(qrTimeout)
-  
-  console.log('\n==================================')
-  console.log('Debug: Received scan event')
-  console.log('Scan QR Code to login:', url)
-  console.log('==================================\n')
-  
-  // Log the URL to a file for debugging
-  fs.appendFileSync('logs/qr_urls.log', `${new Date().toISOString()}: ${url}\n`)
+bot.on('scan', async ({url}) => {
+  try {
+    // Clear QR timeout since we received the event
+    clearTimeout(qrTimeout)
+    
+    console.log('\n==================================')
+    console.log('Debug: Received scan event')
+    
+    // Save QR code as image file
+    const qr = require('qrcode')
+    const qrPath = 'QR.png'
+    await qr.toFile(qrPath, url)
+    console.log(`QR Code saved as ${qrPath}`)
+    console.log('Scan QR Code to login')
+    console.log('==================================\n')
+    
+    // Log the URL to a file for debugging
+    fs.appendFileSync('logs/qr_urls.log', `${new Date().toISOString()}: ${url}\n`)
+  } catch (error) {
+    console.error('Error generating QR code:', error)
+  }
 })
 
 // Listen for login
