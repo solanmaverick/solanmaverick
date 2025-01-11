@@ -27,9 +27,16 @@ if (fs.existsSync(CONFIG_FILE)) {
 
 // Listen for scan event (QR Code)
 bot.on('scan', ({url}) => {
+  // Clear QR timeout since we received the event
+  clearTimeout(qrTimeout)
+  
   console.log('\n==================================')
+  console.log('Debug: Received scan event')
   console.log('Scan QR Code to login:', url)
   console.log('==================================\n')
+  
+  // Log the URL to a file for debugging
+  fs.appendFileSync('logs/qr_urls.log', `${new Date().toISOString()}: ${url}\n`)
 })
 
 // Listen for login
@@ -229,9 +236,36 @@ function handleCommand(command) {
   }
 }
 
-// Start the bot
-console.log('Starting WeChat bot...')
-bot.start()
+// Error handling for uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error)
+  process.exit(1)
+})
 
-// Start summary scheduling
-summarizer.startScheduling(config)
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason)
+  process.exit(1)
+})
+
+// Set timeout for QR code
+const qrTimeout = setTimeout(() => {
+  console.error('Timeout: QR code not received after 30 seconds')
+  process.exit(1)
+}, 30000)
+
+// Start the bot with debug logging
+console.log('Starting WeChat bot...')
+console.log('Debug: Node.js version:', process.version)
+console.log('Debug: wechat4u version:', require('wechat4u/package.json').version)
+
+try {
+  bot.start()
+  console.log('Debug: Bot start() called successfully')
+  
+  // Start summary scheduling
+  summarizer.startScheduling(config)
+  console.log('Debug: Summary scheduling started')
+} catch (error) {
+  console.error('Error starting bot:', error)
+  process.exit(1)
+}
