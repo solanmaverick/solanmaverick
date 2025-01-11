@@ -1,0 +1,16 @@
+# Logs and media
+logs/
+media/
+summaries/
+
+# Dependencies
+node_modules/
+package-lock.json
+
+# Environment
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db

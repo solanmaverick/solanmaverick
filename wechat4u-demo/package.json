@@ -1,0 +1,24 @@
+{
+  "name": "wechat4u-demo",
+  "version": "1.0.0",
+  "description": "WeChat bot using wechat4u for group message monitoring and summarization",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "wechat",
+    "bot",
+    "wechat4u",
+    "monitoring"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dayjs": "^1.11.13",
+    "fs-extra": "^11.2.0",
+    "moment": "^2.30.1",
+    "wechat4u": "^0.7.14"
+  }
+}
