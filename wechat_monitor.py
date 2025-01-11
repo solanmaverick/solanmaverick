@@ -233,7 +233,10 @@ def main():
     
     try:
         # Register command handler for filehelper
-        itchat.msg_register(['Text'], toUserName='filehelper')(handle_command)
+        @itchat.msg_register(['Text'])
+        def filehelper_handler(msg):
+            if msg['ToUserName'] == 'filehelper':
+                handle_command(msg)
         
         # Set up scheduler for daily summaries
         scheduler = BackgroundScheduler()
