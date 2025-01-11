@@ -67,12 +67,59 @@ def on_exit():
     logger.info('Logged out')
 
 @itchat.msg_register([TEXT, NOTE, PICTURE, RECORDING, ATTACHMENT, VIDEO], isGroupChat=True)
+def handle_command(msg):
+    """Handle command messages sent to filehelper"""
+    try:
+        command = msg['Text'].strip()
+        if command == '/list':
+            # List all available groups
+            groups_msg = "Available Groups:\n"
+            for room_id, room_name in monitored_rooms.items():
+                status = "✓" if room_id in config['monitored_groups'] else " "
+                groups_msg += f"[{status}] {room_name} (ID: {room_id})\n"
+            itchat.send(groups_msg, 'filehelper')
+        
+        elif command.startswith('/monitor '):
+            group_id = command[9:].strip()
+            if group_id in monitored_rooms:
+                if group_id not in config['monitored_groups']:
+                    config['monitored_groups'].append(group_id)
+                    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+                        json.dump(config, f, indent=4, ensure_ascii=False)
+                    itchat.send(f'Now monitoring group: {monitored_rooms[group_id]}', 'filehelper')
+                else:
+                    itchat.send('This group is already being monitored.', 'filehelper')
+            else:
+                itchat.send('Invalid group ID. Use /list to see available groups.', 'filehelper')
+        
+        elif command.startswith('/unmonitor '):
+            group_id = command[11:].strip()
+            if group_id in config['monitored_groups']:
+                config['monitored_groups'].remove(group_id)
+                with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+                    json.dump(config, f, indent=4, ensure_ascii=False)
+                itchat.send(f'Stopped monitoring group: {monitored_rooms[group_id]}', 'filehelper')
+            else:
+                itchat.send('This group is not being monitored.', 'filehelper')
+        
+        elif command == '/help':
+            help_msg = """Available Commands:
+/list - List all available groups
+/monitor [group_id] - Start monitoring a group
+/unmonitor [group_id] - Stop monitoring a group
+/help - Show this help message"""
+            itchat.send(help_msg, 'filehelper')
+    
+    except Exception as e:
+        logger.error(f'Error handling command: {str(e)}')
+        itchat.send('Error processing command. Please try again.', 'filehelper')
+
 def handle_group_message(msg):
     """Handle messages from group chats"""
     try:
         # Get message details
-        room_id = msg.FromUserName
-        room_name = monitored_rooms.get(room_id, 'Unknown Group')
+        group_id = msg.FromUserName
+        group_name = monitored_rooms.get(group_id, 'Unknown Group')
         sender = msg.actualNickName
         msg_time = datetime.fromtimestamp(msg.CreateTime).strftime('%Y-%m-%d %H:%M:%S')
         msg_type = msg.type
@@ -92,7 +139,8 @@ def handle_group_message(msg):
         
         # Prepare message data for logging
         msg_data = {
-            'Group': room_name,
+            'GroupId': group_id,
+            'Group': group_name,
             'From': sender,
             'Time': msg_time,
             'Type': msg_type,
@@ -100,7 +148,7 @@ def handle_group_message(msg):
         }
         
         # Log the message
-        logger.info(f"Group: {room_name}")
+        logger.info(f"Group: {group_name}")
         logger.info(f"From: {sender}")
         logger.info(f"Time: {msg_time}")
         logger.info(f"Content: {content}")
@@ -184,6 +232,9 @@ def main():
     logger.info('Starting WeChat monitor...')
     
     try:
+        # Register command handler for filehelper
+        itchat.msg_register(['Text'], toUserName='filehelper')(handle_command)
+        
         # Set up scheduler for daily summaries
         scheduler = BackgroundScheduler()
         summary_time = config['summary_time'].split(':')
