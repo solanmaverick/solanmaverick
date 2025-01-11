@@ -1,4 +1,4 @@
-import itchat_uos as itchat
+import itchat
 import time
 import logging
 import os
@@ -11,6 +11,8 @@ from itchat.content import (
     TEXT, PICTURE, RECORDING, ATTACHMENT, VIDEO,
     MAP, CARD, NOTE, SHARING, FRIENDS
 )
+import qrcode
+from PIL import Image
 
 # Create required directories
 os.makedirs('logs', exist_ok=True)
@@ -293,12 +295,28 @@ def main():
         scheduler.start()
         
         # Enable hot reload to maintain login state
+        def qr_callback(uuid, status, qrcode):
+            if status == '0':
+                try:
+                    # Convert terminal QR code to image
+                    qr = qrcode.QRCode(version=1, box_size=10, border=5)
+                    qr.add_data(f'https://login.weixin.qq.com/l/{uuid}')
+                    qr.make(fit=True)
+                    img = qr.make_image(fill_color="black", back_color="white")
+                    qr_path = os.path.join('logs', 'QR.png')
+                    img.save(qr_path)
+                    logger.info(f'QR code saved as {qr_path}')
+                except Exception as e:
+                    logger.error(f'Error generating QR code image: {str(e)}')
+                    return
+
         itchat.auto_login(
             hotReload=True,
             statusStorageDir='logs/wechat_login.pkl',
             loginCallback=on_login,
             exitCallback=on_exit,
-            enableCmdQR=2  # For better compatibility in Linux environments
+            qrCallback=qr_callback,
+            enableCmdQR=False
         )
         
         # Keep the bot running
