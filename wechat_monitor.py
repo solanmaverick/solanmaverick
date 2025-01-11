@@ -1,4 +1,4 @@
-import itchat
+import itchat_uos as itchat
 import time
 import logging
 import os
@@ -67,7 +67,11 @@ def on_exit():
     logger.info('Logged out')
 
 @itchat.msg_register([TEXT, NOTE, PICTURE, RECORDING, ATTACHMENT, VIDEO], isGroupChat=True)
-def handle_command(msg):
+def handle_group_msg(msg):
+    """Handle messages from group chats"""
+    handle_group_message(msg)
+
+def handle_filehelper_command(msg):
     """Handle command messages sent to filehelper"""
     try:
         command = msg['Text'].strip()
@@ -275,7 +279,7 @@ def main():
         @itchat.msg_register(['Text'])
         def filehelper_handler(msg):
             if msg['ToUserName'] == 'filehelper':
-                handle_command(msg)
+                handle_filehelper_command(msg)
         
         # Set up scheduler for daily summaries
         scheduler = BackgroundScheduler()

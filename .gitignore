@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs and local data
+logs/
+media/
+summaries/
+
+# Configuration
+config.json
+
+# Node
+node_modules/
+package-lock.json
+
+# Environment
+.env
+.venv
+env/
+venv/
+ENV/
