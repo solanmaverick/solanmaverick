@@ -9,62 +9,112 @@ fs.ensureDirSync('logs')
 fs.ensureDirSync('media')
 fs.ensureDirSync('summaries')
 
-// Initialize bot
-const bot = new Wechat4u()
+// Initialize bot with state management
+const STATE_FILE = 'wechat-state.json'
+let bot
 
-// Load configuration
-const CONFIG_FILE = 'config.json'
-let config = {
-  monitoredGroups: [],
-  summaryTime: '23:59'
-}
-
-if (fs.existsSync(CONFIG_FILE)) {
-  config = fs.readJsonSync(CONFIG_FILE)
-} else {
-  fs.writeJsonSync(CONFIG_FILE, config, { spaces: 2 })
-}
-
-// Listen for scan event (QR Code)
-bot.on('scan', async ({url}) => {
+function initBot() {
   try {
-    // Clear QR timeout since we received the event
-    clearTimeout(qrTimeout)
-    
+    // Try to load existing state
+    if (fs.existsSync(STATE_FILE)) {
+      console.log('Debug: Loading existing state...')
+      bot = new Wechat4u(require(`./${STATE_FILE}`))
+    } else {
+      console.log('Debug: Creating new bot instance...')
+      bot = new Wechat4u()
+    }
+
+    // Load configuration
+    const CONFIG_FILE = 'config.json'
+    let config = {
+      monitoredGroups: [],
+      summaryTime: '23:59'
+    }
+
+    if (fs.existsSync(CONFIG_FILE)) {
+      config = fs.readJsonSync(CONFIG_FILE)
+    } else {
+      fs.writeJsonSync(CONFIG_FILE, config, { spaces: 2 })
+    }
+
+    return bot
+  } catch (error) {
+    console.error('Error initializing bot:', error)
+    throw error
+  }
+}
+
+function setupBotEvents(bot) {
+  // Listen for scan event (QR Code)
+  bot.on('scan', async ({url}) => {
+    try {
+      // Clear QR timeout since we received the event
+      clearTimeout(qrTimeout)
+      
+      console.log('\n==================================')
+      console.log('Debug: Received scan event')
+      
+      // Save QR code as image file
+      const qr = require('qrcode')
+      const qrPath = 'QR.png'
+      await qr.toFile(qrPath, url)
+      console.log(`QR Code saved as ${qrPath}`)
+      console.log('Scan QR Code to login')
+      console.log('==================================\n')
+      
+      // Log the URL to a file for debugging
+      fs.appendFileSync('logs/qr_urls.log', `${new Date().toISOString()}: ${url}\n`)
+    } catch (error) {
+      console.error('Error generating QR code:', error)
+    }
+  })
+
+  // Listen for login
+  bot.on('login', () => {
     console.log('\n==================================')
-    console.log('Debug: Received scan event')
-    
-    // Save QR code as image file
-    const qr = require('qrcode')
-    const qrPath = 'QR.png'
-    await qr.toFile(qrPath, url)
-    console.log(`QR Code saved as ${qrPath}`)
-    console.log('Scan QR Code to login')
+    console.log('Successfully logged in!')
     console.log('==================================\n')
     
-    // Log the URL to a file for debugging
-    fs.appendFileSync('logs/qr_urls.log', `${new Date().toISOString()}: ${url}\n`)
-  } catch (error) {
-    console.error('Error generating QR code:', error)
-  }
-})
+    // Save bot state
+    fs.writeFileSync(STATE_FILE, JSON.stringify(bot.botData))
+    console.log('Debug: Bot state saved')
+    
+    // Update group list after login
+    updateGroupList()
+  })
 
-// Listen for login
-bot.on('login', () => {
-  console.log('\n==================================')
-  console.log('Successfully logged in!')
-  console.log('==================================\n')
-  
-  // Update group list after login
-  updateGroupList()
-})
+  // Listen for logout
+  bot.on('logout', () => {
+    console.log('\n==================================')
+    console.log('Logged out!')
+    console.log('==================================\n')
+    
+    // Clear state file
+    if (fs.existsSync(STATE_FILE)) {
+      fs.unlinkSync(STATE_FILE)
+      console.log('Debug: Bot state cleared')
+    }
+  })
 
-// Listen for logout
-bot.on('logout', () => {
-  console.log('\n==================================')
-  console.log('Logged out!')
-  console.log('==================================\n')
-})
+  // Listen for error events
+  bot.on('error', (err) => {
+    console.error('Bot error:', err)
+    // Try to reinitialize on error
+    setTimeout(() => {
+      console.log('Debug: Attempting to recover from error...')
+      bot = initBot()
+      setupBotEvents(bot)
+      bot.start()
+    }, 5000)
+  })
+
+  // Listen for state change
+  bot.on('state-change', state => {
+    console.log('Debug: Bot state changed to', state)
+  })
+
+  return bot
+}
 
 // Listen for messages
 bot.on('message', (msg) => {
@@ -249,19 +299,44 @@ function handleCommand(command) {
 // Error handling for uncaught exceptions
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error)
-  process.exit(1)
+  // Don't exit, try to recover
+  setTimeout(() => {
+    console.log('Debug: Attempting to recover from uncaught exception...')
+    bot = initBot()
+    setupBotEvents(bot)
+    bot.start()
+  }, 5000)
 })
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason)
-  process.exit(1)
+  // Don't exit, try to recover
+  setTimeout(() => {
+    console.log('Debug: Attempting to recover from unhandled rejection...')
+    bot = initBot()
+    setupBotEvents(bot)
+    bot.start()
+  }, 5000)
 })
 
 // Set timeout for QR code
 const qrTimeout = setTimeout(() => {
   console.error('Timeout: QR code not received after 30 seconds')
-  process.exit(1)
+  // Don't exit, try to reinitialize
+  console.log('Debug: Attempting to recover from QR timeout...')
+  bot = initBot()
+  setupBotEvents(bot)
+  bot.start()
 }, 30000)
+
+// Cleanup on exit
+process.on('SIGINT', () => {
+  console.log('\nGracefully shutting down...')
+  if (fs.existsSync(STATE_FILE)) {
+    fs.unlinkSync(STATE_FILE)
+  }
+  process.exit(0)
+})
 
 // Start the bot with debug logging
 console.log('Starting WeChat bot...')
@@ -269,6 +344,9 @@ console.log('Debug: Node.js version:', process.version)
 console.log('Debug: wechat4u version:', require('wechat4u/package.json').version)
 
 try {
+  // Initialize and start bot
+  bot = initBot()
+  setupBotEvents(bot)
   bot.start()
   console.log('Debug: Bot start() called successfully')
   
@@ -277,5 +355,11 @@ try {
   console.log('Debug: Summary scheduling started')
 } catch (error) {
   console.error('Error starting bot:', error)
-  process.exit(1)
+  // Don't exit, try to recover
+  setTimeout(() => {
+    console.log('Debug: Attempting to recover from startup error...')
+    bot = initBot()
+    setupBotEvents(bot)
+    bot.start()
+  }, 5000)
 }
