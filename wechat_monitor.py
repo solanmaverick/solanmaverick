@@ -298,13 +298,10 @@ def main():
         def qr_callback(uuid, status, qrcode):
             if status == '0':
                 try:
-                    # Convert terminal QR code to image
-                    qr = qrcode.QRCode(version=1, box_size=10, border=5)
-                    qr.add_data(f'https://login.weixin.qq.com/l/{uuid}')
-                    qr.make(fit=True)
-                    img = qr.make_image(fill_color="black", back_color="white")
+                    # Save the QR code data directly to file
                     qr_path = os.path.join('logs', 'QR.png')
-                    img.save(qr_path)
+                    with open(qr_path, 'wb') as f:
+                        f.write(qrcode)
                     logger.info(f'QR code saved as {qr_path}')
                 except Exception as e:
                     logger.error(f'Error generating QR code image: {str(e)}')
